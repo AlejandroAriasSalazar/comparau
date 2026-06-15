@@ -1,25 +1,42 @@
 "use client";
 import { useState } from "react";
-import { Plus, X, Scale, ShieldCheck, BadgeCheck } from "lucide-react";
+import { Plus, X, Scale, ShieldCheck, BadgeCheck, GraduationCap } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Institucion } from "@/lib/types";
 
-type Comparada = Institucion & { totalProgramas?: number };
+type Comparada = Institucion & {
+  totalProgramas?: number;
+  saberPro?: { global: number; n: number } | null;
+};
 
-const FILAS: { etiqueta: string; valor: (i: Comparada) => string; mejor?: "alto" }[] = [
-  { etiqueta: "Sector", valor: (i) => i.sector },
-  { etiqueta: "Carácter académico", valor: (i) => i.caracter_academico },
-  { etiqueta: "Naturaleza jurídica", valor: (i) => i.naturaleza_juridica ?? "—" },
+type Fila = {
+  etiqueta: string;
+  texto: (i: Comparada) => string;
+  num?: (i: Comparada) => number | null; // para resaltar el "mejor" (mayor)
+  icono?: boolean;
+};
+
+const FILAS: Fila[] = [
+  { etiqueta: "Sector", texto: (i) => i.sector },
+  { etiqueta: "Carácter académico", texto: (i) => i.caracter_academico },
+  { etiqueta: "Naturaleza jurídica", texto: (i) => i.naturaleza_juridica ?? "—" },
   {
-    etiqueta: "Acreditación alta calidad",
-    valor: (i) =>
-      i.acreditacion_institucional?.acreditada
-        ? `Sí${i.acreditacion_institucional.vigencia_anios ? ` · ${i.acreditacion_institucional.vigencia_anios} años` : ""}`
-        : "No",
+    etiqueta: "Acreditación alta calidad", icono: true,
+    texto: (i) => i.acreditacion_institucional?.acreditada
+      ? `Sí${i.acreditacion_institucional.vigencia_anios ? ` · ${i.acreditacion_institucional.vigencia_anios} años` : ""}` : "No",
   },
-  { etiqueta: "Ciudad", valor: (i) => i.domicilio?.municipio ?? "—" },
-  { etiqueta: "Departamento", valor: (i) => i.domicilio?.departamento ?? "—" },
-  { etiqueta: "Programas activos", valor: (i) => (i.totalProgramas != null ? String(i.totalProgramas) : "—"), mejor: "alto" },
+  {
+    etiqueta: "Saber Pro (promedio global)",
+    texto: (i) => (i.saberPro ? `${i.saberPro.global} pts` : "—"),
+    num: (i) => i.saberPro?.global ?? null,
+  },
+  { etiqueta: "Ciudad", texto: (i) => i.domicilio?.municipio ?? "—" },
+  { etiqueta: "Departamento", texto: (i) => i.domicilio?.departamento ?? "—" },
+  {
+    etiqueta: "Programas activos",
+    texto: (i) => (i.totalProgramas != null ? String(i.totalProgramas) : "—"),
+    num: (i) => i.totalProgramas ?? null,
+  },
 ];
 
 export default function CompararPage() {
@@ -50,9 +67,11 @@ export default function CompararPage() {
     try {
       const enriquecidas = await Promise.all(
         seleccion.map(async (s) => {
-          let totalProgramas: number | undefined;
-          try { totalProgramas = await api.conteoProgramas(s.codigo_snies); } catch { /* opcional */ }
-          return { ...s, totalProgramas };
+          const [totalProgramas, saberPro] = await Promise.all([
+            api.conteoProgramas(s.codigo_snies).catch(() => undefined),
+            api.saberPro(s.codigo_snies).catch(() => null),
+          ]);
+          return { ...s, totalProgramas, saberPro };
         })
       );
       setResultado(enriquecidas);
@@ -66,7 +85,7 @@ export default function CompararPage() {
         <h1 className="text-3xl font-bold tracking-tight text-ink">Comparar universidades</h1>
       </div>
       <p className="mt-2 text-ink-soft">
-        Elige de 2 a 5 instituciones. Los datos vienen en vivo del SNIES (datos abiertos del Ministerio de Educación).
+        Elige de 2 a 5 instituciones. Todo en vivo desde fuentes oficiales: catálogo del SNIES y resultados Saber Pro del ICFES.
       </p>
 
       <div className="mt-6 flex flex-wrap gap-2">
@@ -121,19 +140,21 @@ export default function CompararPage() {
               </thead>
               <tbody className="divide-y divide-surface-border">
                 {FILAS.map((fila) => {
-                  const valores = resultado.map((e) => fila.valor(e));
-                  const max = fila.mejor === "alto"
-                    ? Math.max(...resultado.map((e) => e.totalProgramas ?? -1)) : null;
+                  const nums = fila.num ? resultado.map((e) => fila.num!(e)) : null;
+                  const max = nums ? Math.max(...nums.map((n) => (n ?? -Infinity))) : null;
                   return (
                     <tr key={fila.etiqueta}>
                       <td className="px-5 py-3 text-ink-soft">{fila.etiqueta}</td>
                       {resultado.map((e, idx) => {
-                        const destaca = fila.mejor === "alto" && max != null && (e.totalProgramas ?? -1) === max && max >= 0;
+                        const txt = fila.texto(e);
+                        const destaca = nums != null && max != null && max > -Infinity && nums[idx] === max;
                         return (
                           <td key={e.codigo_snies} className={`px-4 py-3 font-semibold ${destaca ? "text-accent-green" : "text-ink"}`}>
-                            {fila.etiqueta === "Acreditación alta calidad" && valores[idx].startsWith("Sí") ? (
-                              <span className="inline-flex items-center gap-1"><BadgeCheck size={14} className="text-accent-green" /> {valores[idx]}</span>
-                            ) : valores[idx]}
+                            {fila.icono && txt.startsWith("Sí") ? (
+                              <span className="inline-flex items-center gap-1"><BadgeCheck size={14} className="text-accent-green" /> {txt}</span>
+                            ) : fila.etiqueta.startsWith("Saber Pro") && txt !== "—" ? (
+                              <span className="inline-flex items-center gap-1"><GraduationCap size={14} className="text-brand-600" /> {txt}</span>
+                            ) : txt}
                           </td>
                         );
                       })}
@@ -144,8 +165,9 @@ export default function CompararPage() {
             </table>
           </div>
           <p className="mt-3 flex items-center gap-2 text-xs text-ink-faint">
-            <ShieldCheck size={14} /> Datos oficiales en vivo del SNIES (datos.gov.co, MEN · CC BY-SA 4.0).
-            Los indicadores de calidad, empleabilidad y permanencia (Saber Pro / OLE / SPADIES) se añadirán con el backend.
+            <ShieldCheck size={14} /> Datos oficiales en vivo: catálogo SNIES (datos.gov.co) y promedio Saber Pro del ICFES
+            (promedio de las 5 competencias genéricas, dataset u37r-hjmu · CC BY-SA 4.0).
+            Empleabilidad (OLE) y permanencia (SPADIES) se añadirán con el backend.
           </p>
         </div>
       )}
