@@ -1,14 +1,32 @@
 "use client";
 import { useState } from "react";
-import { Plus, X, Scale, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Plus, X, Scale, ShieldCheck, BadgeCheck } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Institucion, Comparacion } from "@/lib/types";
+import type { Institucion } from "@/lib/types";
+
+type Comparada = Institucion & { totalProgramas?: number };
+
+const FILAS: { etiqueta: string; valor: (i: Comparada) => string; mejor?: "alto" }[] = [
+  { etiqueta: "Sector", valor: (i) => i.sector },
+  { etiqueta: "Carácter académico", valor: (i) => i.caracter_academico },
+  { etiqueta: "Naturaleza jurídica", valor: (i) => i.naturaleza_juridica ?? "—" },
+  {
+    etiqueta: "Acreditación alta calidad",
+    valor: (i) =>
+      i.acreditacion_institucional?.acreditada
+        ? `Sí${i.acreditacion_institucional.vigencia_anios ? ` · ${i.acreditacion_institucional.vigencia_anios} años` : ""}`
+        : "No",
+  },
+  { etiqueta: "Ciudad", valor: (i) => i.domicilio?.municipio ?? "—" },
+  { etiqueta: "Departamento", valor: (i) => i.domicilio?.departamento ?? "—" },
+  { etiqueta: "Programas activos", valor: (i) => (i.totalProgramas != null ? String(i.totalProgramas) : "—"), mejor: "alto" },
+];
 
 export default function CompararPage() {
   const [seleccion, setSeleccion] = useState<Institucion[]>([]);
   const [q, setQ] = useState("");
   const [sugerencias, setSugerencias] = useState<Institucion[]>([]);
-  const [resultado, setResultado] = useState<Comparacion | null>(null);
+  const [resultado, setResultado] = useState<Comparada[] | null>(null);
   const [cargando, setCargando] = useState(false);
 
   async function buscar(texto: string) {
@@ -30,8 +48,14 @@ export default function CompararPage() {
     if (seleccion.length < 2) return;
     setCargando(true);
     try {
-      const r = await api.comparar("instituciones", seleccion.map((s) => s.codigo_snies));
-      setResultado(r);
+      const enriquecidas = await Promise.all(
+        seleccion.map(async (s) => {
+          let totalProgramas: number | undefined;
+          try { totalProgramas = await api.conteoProgramas(s.codigo_snies); } catch { /* opcional */ }
+          return { ...s, totalProgramas };
+        })
+      );
+      setResultado(enriquecidas);
     } finally { setCargando(false); }
   }
 
@@ -41,9 +65,10 @@ export default function CompararPage() {
         <Scale className="text-brand-600" size={26} />
         <h1 className="text-3xl font-bold tracking-tight text-ink">Comparar universidades</h1>
       </div>
-      <p className="mt-2 text-ink-soft">Elige de 2 a 5 instituciones. Mostramos cada indicador oficial con su año y fuente.</p>
+      <p className="mt-2 text-ink-soft">
+        Elige de 2 a 5 instituciones. Los datos vienen en vivo del SNIES (datos abiertos del Ministerio de Educación).
+      </p>
 
-      {/* Selección */}
       <div className="mt-6 flex flex-wrap gap-2">
         {seleccion.map((s) => (
           <span key={s.codigo_snies} className="inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-medium text-brand-800">
@@ -82,45 +107,45 @@ export default function CompararPage() {
         {cargando ? "Comparando…" : "Comparar"}
       </button>
 
-      {/* Resultado */}
       {resultado && (
         <div className="mt-10">
-          {resultado.advertencias?.length > 0 && (
-            <div className="mb-4 flex items-start gap-3 rounded-xl border border-accent-amber/30 bg-amber-50 p-4 text-sm text-amber-800">
-              <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-              <ul className="space-y-1">{resultado.advertencias.map((a, k) => <li key={k}>{a}</li>)}</ul>
-            </div>
-          )}
           <div className="card overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-surface-border bg-surface-soft">
                 <tr className="text-left">
-                  <th className="px-5 py-3 font-medium text-ink-soft">Indicador</th>
-                  {resultado.entidades.map((e) => (
+                  <th className="px-5 py-3 font-medium text-ink-soft">Atributo</th>
+                  {resultado.map((e) => (
                     <th key={e.codigo_snies} className="px-4 py-3 font-semibold text-ink">{e.nombre}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-border">
-                {resultado.indicadores.map((fila) => (
-                  <tr key={fila.clave}>
-                    <td className="px-5 py-3 text-ink-soft">
-                      {fila.etiqueta}
-                      <span className="ml-2 text-xs text-ink-faint">{fila.unidad}</span>
-                    </td>
-                    {fila.valores.map((v) => (
-                      <td key={v.codigo_snies} className="px-4 py-3 font-semibold text-ink">
-                        {v.valor ?? <span className="text-ink-faint">—</span>}
-                        {v.anio && <span className="ml-1 text-xs font-normal text-ink-faint">({v.anio})</span>}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {FILAS.map((fila) => {
+                  const valores = resultado.map((e) => fila.valor(e));
+                  const max = fila.mejor === "alto"
+                    ? Math.max(...resultado.map((e) => e.totalProgramas ?? -1)) : null;
+                  return (
+                    <tr key={fila.etiqueta}>
+                      <td className="px-5 py-3 text-ink-soft">{fila.etiqueta}</td>
+                      {resultado.map((e, idx) => {
+                        const destaca = fila.mejor === "alto" && max != null && (e.totalProgramas ?? -1) === max && max >= 0;
+                        return (
+                          <td key={e.codigo_snies} className={`px-4 py-3 font-semibold ${destaca ? "text-accent-green" : "text-ink"}`}>
+                            {fila.etiqueta === "Acreditación alta calidad" && valores[idx].startsWith("Sí") ? (
+                              <span className="inline-flex items-center gap-1"><BadgeCheck size={14} className="text-accent-green" /> {valores[idx]}</span>
+                            ) : valores[idx]}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
           <p className="mt-3 flex items-center gap-2 text-xs text-ink-faint">
-            <ShieldCheck size={14} /> {resultado.meta?.nota_metodologica}
+            <ShieldCheck size={14} /> Datos oficiales en vivo del SNIES (datos.gov.co, MEN · CC BY-SA 4.0).
+            Los indicadores de calidad, empleabilidad y permanencia (Saber Pro / OLE / SPADIES) se añadirán con el backend.
           </p>
         </div>
       )}
