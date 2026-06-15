@@ -1,0 +1,1386 @@
+openapi: 3.1.0
+
+# =============================================================================
+#  comparaU.com — API de comparación de la Educación Superior de Colombia
+#  Especificación de contrato — OpenAPI 3.1 (contract-first)
+#
+#  Fuentes oficiales (única autoridad de datos):
+#    - SNIES — Sistema Nacional de Información de la Educación Superior (MEN)
+#    - datos.gov.co — Portal de Datos Abiertos del Estado colombiano
+#        * MEN_INSTITUCIONES EDUCACIÓN SUPERIOR (id: n5yy-8nav)
+#        * MEN_PROGRAMAS_DE_EDUCACIÓN_SUPERIOR  (id: upr9-nkiz)
+#        * Resultados únicos Saber Pro — ICFES        (id: u37r-hjmu)
+#    - CNA — Consejo Nacional de Acreditación (acreditación alta calidad)
+#    - OLE — Observatorio Laboral para la Educación (MEN): empleabilidad e ingreso
+#    - SPADIES — Sistema de deserción y permanencia (subsistema del SNIES, MEN)
+#    - ICFES — Instituto Colombiano para la Evaluación de la Educación (Saber Pro)
+#    - HECAA / SACES — registros de oferta y registro calificado (MEN)
+#    - DANE — DIVIPOLA (codificación geográfica oficial)
+#  Licencia de datos de origen: Creative Commons BY-SA 4.0 (datos.gov.co)
+#
+#  Todos los recursos exponen un bloque `fuente` con trazabilidad verificable
+#  (dataset, identificador, URL, fecha de actualización y norma cuando aplica).
+# =============================================================================
+
+info:
+  title: comparaU.com API — Comparación de Educación Superior de Colombia
+  version: 1.1.0
+  summary: >-
+    API REST de solo lectura para comparar el 100% de las Instituciones de
+    Educación Superior (IES) de Colombia y su oferta académica, con indicadores
+    oficiales de calidad, empleabilidad y permanencia. Solo fuentes oficiales y
+    verificables.
+  description: |
+    # comparaU.com API
+
+    API de **solo lectura** (read-only) que potencia a comparaU.com: permite
+    **comparar universidades y programas** de Colombia usando únicamente datos
+    oficiales del Estado. Publica, con estándares profesionales, el catálogo
+    completo de la educación superior colombiana:
+
+    - **Instituciones (IES)**: el 100% de las IES activas registradas en el
+      SNIES — universidades, instituciones universitarias / escuelas
+      tecnológicas, instituciones tecnológicas e instituciones técnicas
+      profesionales, tanto del sector oficial como privado.
+    - **Programas académicos**: oferta de pregrado y posgrado con núcleo básico
+      del conocimiento (NBC), área de conocimiento, nivel de formación,
+      metodología, créditos, título otorgado, registro calificado y
+      acreditación de alta calidad.
+    - **Acreditaciones**: institucionales y de programa (CNA), con número de
+      resolución, fecha y vigencia.
+    - **Estadísticas poblacionales**: matriculados, admitidos, inscritos y
+      graduados por año y periodo (bases poblacionales del SNIES).
+    - **Indicadores de resultado** (el corazón de comparaU): calidad académica
+      (resultados Saber Pro del ICFES), empleabilidad e ingreso de enganche
+      (OLE) y deserción/permanencia/graduación (SPADIES).
+    - **Comparación lado a lado**: endpoint dedicado para confrontar de 2 a 5
+      instituciones o programas sobre un conjunto homogéneo de indicadores
+      oficiales.
+    - **Catálogos / taxonomías oficiales**: caracteres académicos, áreas de
+      conocimiento, NBC, niveles, metodologías y geografía DIVIPOLA.
+
+    ## Principios de diseño
+    - **Trazabilidad total**: cada registro incluye un objeto `fuente` que
+      permite verificar el dato contra el origen oficial.
+    - **Datos reales y verificables**: la API no inventa ni completa datos. Si
+      la fuente oficial no publica un campo, este se devuelve `null` con la
+      causa documentada (`disponibilidad`).
+    - **Contrato estable**: versionado por URI (`/v1`), cambios incompatibles
+      solo en mayor versión.
+    - **Estándares**: paginación por cursor, `ETag`/`Cache-Control`, errores
+      RFC 9457 (Problem Details), rate limiting con cabeceras IETF.
+
+    ## Alcance explícito
+    - **Incluido**: IES, sedes, programas, acreditaciones, estadísticas
+      poblacionales, indicadores de resultado (calidad/empleabilidad/permanencia)
+      y comparación.
+    - **No incluido**: contactos de jefes de programa (no existen en ninguna
+      fuente oficial centralizada y, por tanto, no son verificables) y costos
+      de matrícula (no publicados oficialmente de forma estructurada).
+
+    ## Ética de la comparación
+    comparaU **no produce un ranking propio**. El MIDE (índice oficial del MEN)
+    fue descontinuado, de modo que la API expone los indicadores oficiales tal
+    como los publican ICFES, OLE y SPADIES, con su año y fuente, y deja la
+    ponderación al usuario. Nunca se mezclan indicadores en un puntaje único no
+    oficial. Toda comparación advierte sobre comparabilidad (mismo año, mismo
+    nivel, mismo NBC) para evitar conclusiones espurias.
+  contact:
+    name: Equipo comparaU.com
+    email: datos@comparau.com
+    url: https://comparau.com
+  license:
+    name: Datos bajo CC BY-SA 4.0 (datos.gov.co) — Contrato API bajo MIT
+    url: https://creativecommons.org/licenses/by-sa/4.0/deed.es
+  termsOfService: https://comparau.com/terminos
+  x-data-sources:
+    - name: SNIES
+      authority: Ministerio de Educación Nacional
+      url: https://snies.mineducacion.gov.co
+    - name: datos.gov.co MEN_INSTITUCIONES EDUCACIÓN SUPERIOR
+      id: n5yy-8nav
+      url: https://www.datos.gov.co/Educaci-n/MEN_INSTITUCIONES-EDUCACI-N-SUPERIOR/n5yy-8nav
+    - name: datos.gov.co MEN_PROGRAMAS_DE_EDUCACIÓN_SUPERIOR
+      id: upr9-nkiz
+      url: https://www.datos.gov.co/Educaci-n/MEN_PROGRAMAS_DE_EDUCACI-N_SUPERIOR/upr9-nkiz
+    - name: datos.gov.co Resultados únicos Saber Pro (ICFES)
+      id: u37r-hjmu
+      url: https://www.datos.gov.co/Educaci-n/Resultados-nicos-Saber-Pro/u37r-hjmu
+    - name: OLE — Observatorio Laboral para la Educación
+      authority: Ministerio de Educación Nacional
+      url: https://ole.mineducacion.gov.co
+    - name: SPADIES — Deserción y permanencia (subsistema SNIES)
+      authority: Ministerio de Educación Nacional
+      url: https://www.mineducacion.gov.co/sistemasinfo/spadies
+    - name: ICFES — Instituto Colombiano para la Evaluación de la Educación
+      url: https://www.icfes.gov.co
+    - name: CNA — Consejo Nacional de Acreditación
+      url: https://www.cna.gov.co
+    - name: DANE — DIVIPOLA
+      url: https://www.dane.gov.co
+
+externalDocs:
+  description: Documento de diseño, arquitectura técnica, gobernanza y diccionario
+  url: https://comparau.com/docs/diseno
+
+servers:
+  - url: https://api.comparau.com/v1
+    description: Producción
+  - url: https://sandbox.api.comparau.com/v1
+    description: Entorno de pruebas (sandbox)
+
+tags:
+  - name: Instituciones
+    description: Instituciones de Educación Superior (IES) registradas en el SNIES.
+  - name: Sedes
+    description: Sedes principales y seccionales de las IES.
+  - name: Programas
+    description: Programas académicos de pregrado y posgrado.
+  - name: Acreditaciones
+    description: Acreditaciones de alta calidad (CNA) institucionales y de programa.
+  - name: Estadísticas
+    description: Estadísticas poblacionales (matriculados, admitidos, graduados).
+  - name: Indicadores
+    description: >-
+      Indicadores oficiales de resultado: calidad (Saber Pro/ICFES),
+      empleabilidad e ingreso (OLE) y deserción/permanencia (SPADIES).
+  - name: Comparación
+    description: Comparación lado a lado de instituciones o programas.
+  - name: Catálogos
+    description: Taxonomías y catálogos oficiales (referencia).
+  - name: Metadatos
+    description: Procedencia de datos, salud del servicio y diccionario.
+
+security:
+  - ApiKeyAuth: []
+  - OAuth2ClientCredentials: []
+
+paths:
+
+  # ----------------------------------------------------------------- Instituciones
+  /instituciones:
+    get:
+      tags: [Instituciones]
+      summary: Listar instituciones (IES)
+      description: >-
+        Devuelve el listado paginado de IES. Soporta filtrado, ordenamiento,
+        selección de campos (sparse fieldsets) y búsqueda de texto libre.
+      operationId: listInstituciones
+      parameters:
+        - $ref: '#/components/parameters/PageCursor'
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Query'
+        - name: sector
+          in: query
+          description: Sector de la IES.
+          schema:
+            $ref: '#/components/schemas/Sector'
+        - name: caracter_academico
+          in: query
+          description: Carácter académico de la IES.
+          schema:
+            $ref: '#/components/schemas/CaracterAcademico'
+        - name: naturaleza_juridica
+          in: query
+          schema:
+            $ref: '#/components/schemas/NaturalezaJuridica'
+        - name: principal_seccional
+          in: query
+          schema:
+            type: string
+            enum: [Principal, Seccional]
+        - name: departamento
+          in: query
+          description: Código DIVIPOLA del departamento de domicilio (2 dígitos).
+          schema:
+            type: string
+            pattern: '^[0-9]{1,2}$'
+            example: '11'
+        - name: municipio
+          in: query
+          description: Código DIVIPOLA del municipio de domicilio (5 dígitos).
+          schema:
+            type: string
+            pattern: '^[0-9]{5}$'
+            example: '11001'
+        - name: acreditada_alta_calidad
+          in: query
+          description: Filtra IES con acreditación institucional de alta calidad vigente.
+          schema:
+            type: boolean
+        - name: estado
+          in: query
+          schema:
+            $ref: '#/components/schemas/EstadoIES'
+      responses:
+        '200':
+          description: Listado paginado de instituciones.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            RateLimit: { $ref: '#/components/headers/RateLimit' }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstitucionCollection'
+            text/csv:
+              schema:
+                type: string
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /instituciones/{codigo_snies}:
+    get:
+      tags: [Instituciones]
+      summary: Obtener una institución por código SNIES
+      operationId: getInstitucion
+      parameters:
+        - $ref: '#/components/parameters/CodigoSniesInstitucion'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Institución encontrada.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            Last-Modified: { $ref: '#/components/headers/LastModified' }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstitucionResource'
+        '304': { description: No modificado (coincide If-None-Match). }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /instituciones/{codigo_snies}/sedes:
+    get:
+      tags: [Sedes]
+      summary: Listar sedes de una institución
+      operationId: listSedesByInstitucion
+      parameters:
+        - $ref: '#/components/parameters/CodigoSniesInstitucion'
+        - $ref: '#/components/parameters/PageCursor'
+        - $ref: '#/components/parameters/PageLimit'
+      responses:
+        '200':
+          description: Sedes de la institución.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SedeCollection'
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /instituciones/{codigo_snies}/programas:
+    get:
+      tags: [Programas]
+      summary: Listar programas de una institución
+      operationId: listProgramasByInstitucion
+      parameters:
+        - $ref: '#/components/parameters/CodigoSniesInstitucion'
+        - $ref: '#/components/parameters/PageCursor'
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/Sort'
+        - name: nivel_academico
+          in: query
+          schema: { $ref: '#/components/schemas/NivelAcademico' }
+        - name: estado
+          in: query
+          schema: { $ref: '#/components/schemas/EstadoPrograma' }
+      responses:
+        '200':
+          description: Programas de la institución.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramaCollection'
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /instituciones/{codigo_snies}/acreditaciones:
+    get:
+      tags: [Acreditaciones]
+      summary: Acreditaciones de una institución
+      operationId: listAcreditacionesByInstitucion
+      parameters:
+        - $ref: '#/components/parameters/CodigoSniesInstitucion'
+      responses:
+        '200':
+          description: Acreditaciones institucionales y de programa asociadas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcreditacionCollection'
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /instituciones/{codigo_snies}/estadisticas-poblacionales:
+    get:
+      tags: [Estadísticas]
+      summary: Estadísticas poblacionales de una institución
+      description: >-
+        Matriculados, admitidos, inscritos y graduados por año y periodo, según
+        las bases poblacionales del SNIES.
+      operationId: getEstadisticasByInstitucion
+      parameters:
+        - $ref: '#/components/parameters/CodigoSniesInstitucion'
+        - name: anio
+          in: query
+          schema: { type: integer, minimum: 1990, example: 2024 }
+        - name: periodo
+          in: query
+          schema: { type: integer, enum: [1, 2] }
+      responses:
+        '200':
+          description: Series poblacionales agregadas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstadisticaPoblacionalCollection'
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /instituciones/{codigo_snies}/indicadores:
+    get:
+      tags: [Indicadores]
+      summary: Indicadores oficiales de resultado de una institución
+      description: >-
+        Devuelve, con su año y fuente, los indicadores de calidad (Saber Pro),
+        empleabilidad e ingreso (OLE) y deserción/permanencia (SPADIES) de la
+        institución. Cada indicador es independiente y trazable; no se combinan
+        en un puntaje único.
+      operationId: getIndicadoresByInstitucion
+      parameters:
+        - $ref: '#/components/parameters/CodigoSniesInstitucion'
+        - name: anio
+          in: query
+          schema: { type: integer, minimum: 1990, example: 2023 }
+        - name: dominio
+          in: query
+          description: Filtra por dominio de indicador.
+          schema:
+            type: string
+            enum: [calidad, empleabilidad, permanencia]
+      responses:
+        '200':
+          description: Indicadores de resultado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IndicadoresResource' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ----------------------------------------------------------------- Programas
+  /programas:
+    get:
+      tags: [Programas]
+      summary: Listar programas académicos
+      description: Catálogo global de programas con filtrado avanzado.
+      operationId: listProgramas
+      parameters:
+        - $ref: '#/components/parameters/PageCursor'
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Query'
+        - name: codigo_institucion
+          in: query
+          schema: { type: string, example: '1201' }
+        - name: nivel_academico
+          in: query
+          schema: { $ref: '#/components/schemas/NivelAcademico' }
+        - name: nivel_formacion
+          in: query
+          schema: { $ref: '#/components/schemas/NivelFormacion' }
+        - name: area_conocimiento
+          in: query
+          description: Código del área de conocimiento (SNIES).
+          schema: { type: string, example: '5' }
+        - name: nbc
+          in: query
+          description: Código del Núcleo Básico del Conocimiento (SNIES).
+          schema: { type: string, example: '566' }
+        - name: metodologia
+          in: query
+          schema: { $ref: '#/components/schemas/Metodologia' }
+        - name: departamento
+          in: query
+          description: Código DIVIPOLA del departamento donde se oferta el programa.
+          schema: { type: string, pattern: '^[0-9]{1,2}$' }
+        - name: municipio
+          in: query
+          schema: { type: string, pattern: '^[0-9]{5}$' }
+        - name: estado
+          in: query
+          schema: { $ref: '#/components/schemas/EstadoPrograma' }
+        - name: acreditado_alta_calidad
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Listado paginado de programas.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            RateLimit: { $ref: '#/components/headers/RateLimit' }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramaCollection'
+            text/csv:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /programas/{codigo_snies}:
+    get:
+      tags: [Programas]
+      summary: Obtener un programa por código SNIES
+      operationId: getPrograma
+      parameters:
+        - $ref: '#/components/parameters/CodigoSniesPrograma'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Programa encontrado.
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramaResource'
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /programas/{codigo_snies}/indicadores:
+    get:
+      tags: [Indicadores]
+      summary: Indicadores oficiales de resultado de un programa
+      description: >-
+        Indicadores a nivel de programa cuando la fuente los publica con ese
+        grano (Saber Pro por programa, OLE por programa/NBC, SPADIES por
+        programa). Si la fuente solo informa a nivel institucional o de NBC, se
+        indica el grano disponible en `disponibilidad`.
+      operationId: getIndicadoresByPrograma
+      parameters:
+        - $ref: '#/components/parameters/CodigoSniesPrograma'
+        - name: anio
+          in: query
+          schema: { type: integer, minimum: 1990, example: 2023 }
+      responses:
+        '200':
+          description: Indicadores de resultado del programa.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IndicadoresResource' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ----------------------------------------------------------------- Comparación
+  /comparar:
+    get:
+      tags: [Comparación]
+      summary: Comparar instituciones o programas lado a lado
+      description: >-
+        Confronta de 2 a 5 entidades del mismo tipo sobre un conjunto homogéneo
+        de indicadores oficiales. La respuesta es una matriz normalizada
+        (entidad × indicador) con el valor, su año y su fuente, más
+        advertencias de comparabilidad. No produce un puntaje único ni un
+        ranking propietario.
+      operationId: comparar
+      parameters:
+        - name: tipo
+          in: query
+          required: true
+          schema: { type: string, enum: [instituciones, programas] }
+        - name: ids
+          in: query
+          required: true
+          description: Lista de 2 a 5 códigos SNIES separados por coma.
+          schema:
+            type: array
+            minItems: 2
+            maxItems: 5
+            items: { type: string }
+          style: form
+          explode: false
+          example: ['1201', '1101', '1714']
+        - name: indicadores
+          in: query
+          description: >-
+            Subconjunto de indicadores a comparar (separados por coma). Por
+            defecto incluye acreditación, calidad, empleabilidad y permanencia.
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                [acreditacion, saber_pro, empleabilidad_tasa, ingreso_mediano,
+                 desercion, matriculados, creditos]
+          style: form
+          explode: false
+        - name: anio
+          in: query
+          schema: { type: integer, example: 2023 }
+      responses:
+        '200':
+          description: Matriz de comparación.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Comparacion' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+
+  # ----------------------------------------------------------------- Acreditaciones
+  /acreditaciones:
+    get:
+      tags: [Acreditaciones]
+      summary: Listar acreditaciones de alta calidad (CNA)
+      operationId: listAcreditaciones
+      parameters:
+        - $ref: '#/components/parameters/PageCursor'
+        - $ref: '#/components/parameters/PageLimit'
+        - name: tipo
+          in: query
+          schema: { type: string, enum: [Institucional, Programa] }
+        - name: vigente
+          in: query
+          schema: { type: boolean }
+        - name: codigo_institucion
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Listado de acreditaciones.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcreditacionCollection'
+
+  # ----------------------------------------------------------------- Catálogos
+  /catalogos/caracteres-academicos:
+    get:
+      tags: [Catálogos]
+      summary: Catálogo de caracteres académicos
+      operationId: getCaracteresAcademicos
+      responses:
+        '200':
+          description: Catálogo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CatalogoCollection' }
+  /catalogos/areas-conocimiento:
+    get:
+      tags: [Catálogos]
+      summary: Catálogo de áreas de conocimiento
+      operationId: getAreasConocimiento
+      responses:
+        '200':
+          description: Catálogo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CatalogoCollection' }
+  /catalogos/nbc:
+    get:
+      tags: [Catálogos]
+      summary: Catálogo de Núcleos Básicos del Conocimiento (NBC)
+      operationId: getNbc
+      responses:
+        '200':
+          description: Catálogo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CatalogoCollection' }
+  /catalogos/niveles-formacion:
+    get:
+      tags: [Catálogos]
+      summary: Catálogo de niveles de formación
+      operationId: getNivelesFormacion
+      responses:
+        '200':
+          description: Catálogo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CatalogoCollection' }
+  /catalogos/metodologias:
+    get:
+      tags: [Catálogos]
+      summary: Catálogo de metodologías
+      operationId: getMetodologias
+      responses:
+        '200':
+          description: Catálogo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CatalogoCollection' }
+  /catalogos/departamentos:
+    get:
+      tags: [Catálogos]
+      summary: Catálogo de departamentos (DIVIPOLA)
+      operationId: getDepartamentos
+      responses:
+        '200':
+          description: Catálogo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CatalogoCollection' }
+  /catalogos/municipios:
+    get:
+      tags: [Catálogos]
+      summary: Catálogo de municipios (DIVIPOLA)
+      operationId: getMunicipios
+      parameters:
+        - name: departamento
+          in: query
+          schema: { type: string, pattern: '^[0-9]{1,2}$' }
+      responses:
+        '200':
+          description: Catálogo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CatalogoCollection' }
+
+  # ----------------------------------------------------------------- Metadatos
+  /meta/fuentes:
+    get:
+      tags: [Metadatos]
+      summary: Procedencia y vigencia de las fuentes de datos
+      operationId: getFuentes
+      security: []
+      responses:
+        '200':
+          description: Inventario de fuentes oficiales y su última sincronización.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/FuenteCatalogo' }
+
+  /health:
+    get:
+      tags: [Metadatos]
+      summary: Estado de salud del servicio
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Servicio operativo.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  version: { type: string, example: 1.0.0 }
+                  ultima_sincronizacion_snies:
+                    type: string
+                    format: date
+
+components:
+
+  # =========================================================== Security schemes
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: >-
+        Clave de API para identificar a la aplicación cliente y aplicar cuotas.
+        Recomendada para el plan público de solo lectura.
+    OAuth2ClientCredentials:
+      type: oauth2
+      description: OAuth 2.0 (client credentials) para clientes con cuotas ampliadas.
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.esco-api.example.co/oauth/token
+          scopes:
+            read:instituciones: Lectura de instituciones
+            read:programas: Lectura de programas
+            read:estadisticas: Lectura de estadísticas poblacionales
+
+  # =========================================================== Parameters
+  parameters:
+    PageCursor:
+      name: cursor
+      in: query
+      description: Cursor de paginación opaco devuelto en `meta.paginacion.siguiente`.
+      schema: { type: string }
+    PageLimit:
+      name: limit
+      in: query
+      description: Número de elementos por página (1–200).
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Sort:
+      name: sort
+      in: query
+      description: >-
+        Campos de ordenamiento separados por coma. Prefijo `-` para
+        descendente. Ej.: `sort=nombre` o `sort=-fecha_actualizacion`.
+      schema: { type: string, example: nombre }
+    Fields:
+      name: fields
+      in: query
+      description: >-
+        Selección parcial de campos (sparse fieldsets) separados por coma.
+        Ej.: `fields=codigo_snies,nombre,sector`.
+      schema: { type: string }
+    Query:
+      name: q
+      in: query
+      description: Búsqueda de texto libre (nombre, sigla).
+      schema: { type: string }
+    CodigoSniesInstitucion:
+      name: codigo_snies
+      in: path
+      required: true
+      description: Código SNIES de la institución.
+      schema: { type: string, example: '1201' }
+    CodigoSniesPrograma:
+      name: codigo_snies
+      in: path
+      required: true
+      description: Código SNIES del programa.
+      schema: { type: string, example: '5' }
+
+  # =========================================================== Headers
+  headers:
+    ETag:
+      description: Identificador de versión del recurso para caché condicional.
+      schema: { type: string }
+    CacheControl:
+      description: Política de caché.
+      schema: { type: string, example: 'public, max-age=86400' }
+    LastModified:
+      description: Fecha de última modificación del recurso en la fuente.
+      schema: { type: string }
+    RateLimit:
+      description: Cuota restante según borrador IETF RateLimit.
+      schema: { type: string, example: 'limit=1000, remaining=998, reset=3600' }
+
+  # =========================================================== Responses
+  responses:
+    BadRequest:
+      description: Solicitud mal formada.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Credenciales ausentes o inválidas.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Recurso no encontrado.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    UnprocessableEntity:
+      description: Parámetros de filtro válidos en forma pero semánticamente incorrectos.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    TooManyRequests:
+      description: Se superó la cuota de peticiones.
+      headers:
+        Retry-After:
+          description: Segundos hasta poder reintentar.
+          schema: { type: integer }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    InternalError:
+      description: Error interno del servidor.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  # =========================================================== Schemas
+  schemas:
+
+    # ---- Tipos enumerados (taxonomías oficiales SNIES) ----
+    Sector:
+      type: string
+      description: Sector de la IES según SNIES.
+      enum: [Oficial, Privado]
+    CaracterAcademico:
+      type: string
+      description: Carácter académico de la IES según SNIES.
+      enum:
+        - Universidad
+        - Institución Universitaria/Escuela Tecnológica
+        - Institución Tecnológica
+        - Institución Técnica Profesional
+    NaturalezaJuridica:
+      type: string
+      enum: [Fundación, Corporación, Nacional, Departamental, Municipal]
+    EstadoIES:
+      type: string
+      enum: [Activa, Inactiva]
+    NivelAcademico:
+      type: string
+      description: Nivel académico del programa.
+      enum: [Pregrado, Posgrado]
+    NivelFormacion:
+      type: string
+      description: Nivel de formación del programa.
+      enum:
+        - Técnica Profesional
+        - Tecnológica
+        - Universitaria
+        - Especialización
+        - Especialización médico quirúrgica
+        - Maestría
+        - Doctorado
+    Metodologia:
+      type: string
+      enum: [Presencial, Distancia, Virtual, Dual]
+    EstadoPrograma:
+      type: string
+      enum: [Activo, Inactivo]
+    TipoAcreditacion:
+      type: string
+      description: >-
+        Tipo de reconocimiento del programa: "Registro calificado" es el
+        requisito mínimo para operar; "Acreditación de alta calidad" es el
+        reconocimiento superior otorgado por el CNA.
+      enum: [Registro calificado, Acreditación de alta calidad]
+
+    # ---- Procedencia / trazabilidad ----
+    Fuente:
+      type: object
+      description: Trazabilidad del registro hacia la fuente oficial.
+      required: [sistema, dataset, fecha_actualizacion]
+      properties:
+        sistema:
+          type: string
+          example: SNIES
+        autoridad:
+          type: string
+          example: Ministerio de Educación Nacional
+        dataset:
+          type: string
+          example: MEN_INSTITUCIONES EDUCACIÓN SUPERIOR
+        dataset_id:
+          type: string
+          example: n5yy-8nav
+        url:
+          type: string
+          format: uri
+          example: https://www.datos.gov.co/d/n5yy-8nav
+        licencia:
+          type: string
+          example: CC BY-SA 4.0
+        fecha_actualizacion:
+          type: string
+          format: date
+          description: Fecha de actualización del dato en la fuente oficial.
+          example: '2022-07-08'
+      additionalProperties: false
+
+    Disponibilidad:
+      type: object
+      description: >-
+        Estado de disponibilidad de un campo no garantizado por la fuente.
+        Permite distinguir "no aplica" de "la fuente no lo publica".
+      properties:
+        campo: { type: string }
+        estado:
+          type: string
+          enum: [disponible, no_publicado_por_fuente, no_aplica, no_informa]
+        nota: { type: string }
+
+    # ---- Norma / acto administrativo ----
+    Norma:
+      type: object
+      description: Acto administrativo de creación o reconocimiento.
+      properties:
+        tipo:
+          type: string
+          example: Resolución
+        numero:
+          type: string
+          example: '16377'
+        entidad:
+          type: string
+          example: Ministerio de Educación Nacional
+        fecha:
+          type: [string, 'null']
+          format: date
+
+    # ---- Geografía DIVIPOLA ----
+    Ubicacion:
+      type: object
+      properties:
+        direccion: { type: [string, 'null'] }
+        municipio: { type: [string, 'null'], example: Medellín }
+        codigo_municipio_divipola:
+          type: [string, 'null']
+          pattern: '^[0-9]{5}$'
+          example: '05001'
+        departamento: { type: [string, 'null'], example: Antioquia }
+        codigo_departamento_divipola:
+          type: [string, 'null']
+          example: '05'
+
+    # ---- Acreditación institucional embebida ----
+    AcreditacionInstitucional:
+      type: object
+      properties:
+        acreditada:
+          type: boolean
+          description: ¿La IES cuenta con acreditación institucional de alta calidad?
+        resolucion:
+          type: [string, 'null']
+          example: '15859'
+        fecha:
+          type: [string, 'null']
+          format: date
+        vigencia_anios:
+          type: [integer, 'null']
+          example: 6
+        vence:
+          type: [string, 'null']
+          format: date
+
+    # ---- INSTITUCIÓN ----
+    Institucion:
+      type: object
+      required: [codigo_snies, nombre, sector, caracter_academico]
+      properties:
+        codigo_snies:
+          type: string
+          description: Código de institución asignado por el MEN (SNIES).
+          example: '1201'
+        nombre:
+          type: string
+          example: UNIVERSIDAD DE ANTIOQUIA
+        sigla:
+          type: [string, 'null']
+          example: UdeA
+        nit:
+          type: [string, 'null']
+          example: 890.980.040-8
+        sector: { $ref: '#/components/schemas/Sector' }
+        caracter_academico: { $ref: '#/components/schemas/CaracterAcademico' }
+        naturaleza_juridica: { $ref: '#/components/schemas/NaturalezaJuridica' }
+        principal_seccional:
+          type: string
+          enum: [Principal, Seccional]
+        norma_creacion: { $ref: '#/components/schemas/Norma' }
+        estado: { $ref: '#/components/schemas/EstadoIES' }
+        sitio_web:
+          type: [string, 'null']
+          format: uri
+          example: https://www.udea.edu.co
+        telefono:
+          type: [string, 'null']
+        domicilio: { $ref: '#/components/schemas/Ubicacion' }
+        acreditacion_institucional:
+          $ref: '#/components/schemas/AcreditacionInstitucional'
+        total_programas:
+          type: [integer, 'null']
+          description: Conteo de programas asociados (derivado).
+        enlaces:
+          type: object
+          properties:
+            self: { type: string, format: uri }
+            programas: { type: string, format: uri }
+            sedes: { type: string, format: uri }
+            acreditaciones: { type: string, format: uri }
+        fuente: { $ref: '#/components/schemas/Fuente' }
+      additionalProperties: false
+
+    # ---- SEDE ----
+    Sede:
+      type: object
+      properties:
+        codigo_snies_institucion: { type: string, example: '1201' }
+        nombre: { type: string, example: 'Sede Medellín' }
+        tipo:
+          type: string
+          enum: [Principal, Seccional]
+        ubicacion: { $ref: '#/components/schemas/Ubicacion' }
+        fuente: { $ref: '#/components/schemas/Fuente' }
+
+    # ---- Registro calificado embebido ----
+    RegistroCalificado:
+      type: object
+      description: Reconocimiento mínimo para ofertar el programa.
+      properties:
+        numero_resolucion:
+          type: [string, 'null']
+        fecha:
+          type: [string, 'null']
+          format: date
+        vigencia_anios:
+          type: [integer, 'null']
+
+    # ---- Acreditación de programa embebida ----
+    AcreditacionPrograma:
+      type: object
+      properties:
+        acreditado:
+          type: boolean
+        tipo: { $ref: '#/components/schemas/TipoAcreditacion' }
+        numero_resolucion:
+          type: [string, 'null']
+        fecha:
+          type: [string, 'null']
+          format: date
+        anios_acreditados:
+          type: [integer, 'null']
+          example: 7
+
+    # ---- PROGRAMA ----
+    Programa:
+      type: object
+      required: [codigo_snies, nombre, codigo_institucion, nivel_academico]
+      properties:
+        codigo_snies:
+          type: string
+          description: Código SNIES del programa.
+          example: '5'
+        nombre:
+          type: string
+          example: PSICOLOGÍA
+        codigo_institucion:
+          type: string
+          example: '1201'
+        nombre_institucion:
+          type: string
+          example: UNIVERSIDAD DE ANTIOQUIA
+        titulo_otorgado:
+          type: [string, 'null']
+          example: PSICÓLOGO
+        nivel_academico: { $ref: '#/components/schemas/NivelAcademico' }
+        nivel_formacion: { $ref: '#/components/schemas/NivelFormacion' }
+        area_conocimiento:
+          type: object
+          properties:
+            codigo: { type: [string, 'null'], example: '5' }
+            nombre: { type: [string, 'null'], example: 'Ciencias sociales y humanas' }
+        nucleo_basico_conocimiento:
+          type: object
+          description: Núcleo Básico del Conocimiento (NBC).
+          properties:
+            codigo: { type: [string, 'null'], example: '566' }
+            nombre: { type: [string, 'null'], example: 'Psicología' }
+        metodologia: { $ref: '#/components/schemas/Metodologia' }
+        creditos:
+          type: [integer, 'null']
+          example: 178
+        periodicidad:
+          type: [string, 'null']
+          example: Semestral
+        numero_periodos:
+          type: [integer, 'null']
+          example: 10
+        descripcion:
+          type: [string, 'null']
+          description: >-
+            Descripción del programa. La fuente oficial centralizada (SNIES
+            abierto) NO publica este campo; se devuelve `null` salvo que se
+            incorpore desde el documento de registro calificado del MEN. Ver
+            `disponibilidad`.
+        municipio_oferta: { $ref: '#/components/schemas/Ubicacion' }
+        estado: { $ref: '#/components/schemas/EstadoPrograma' }
+        fecha_creacion:
+          type: [string, 'null']
+          format: date
+        registro_calificado: { $ref: '#/components/schemas/RegistroCalificado' }
+        acreditacion: { $ref: '#/components/schemas/AcreditacionPrograma' }
+        disponibilidad:
+          type: array
+          items: { $ref: '#/components/schemas/Disponibilidad' }
+        enlaces:
+          type: object
+          properties:
+            self: { type: string, format: uri }
+            institucion: { type: string, format: uri }
+        fuente: { $ref: '#/components/schemas/Fuente' }
+      additionalProperties: false
+
+    # ---- ACREDITACIÓN (recurso) ----
+    Acreditacion:
+      type: object
+      properties:
+        id: { type: string }
+        tipo:
+          type: string
+          enum: [Institucional, Programa]
+        codigo_institucion: { type: string }
+        codigo_programa: { type: [string, 'null'] }
+        numero_resolucion: { type: [string, 'null'] }
+        fecha_otorgamiento: { type: [string, 'null'], format: date }
+        vigencia_anios: { type: [integer, 'null'] }
+        vence: { type: [string, 'null'], format: date }
+        vigente: { type: boolean }
+        otorgada_por:
+          type: string
+          example: Consejo Nacional de Acreditación (CNA)
+        fuente: { $ref: '#/components/schemas/Fuente' }
+
+    # ---- ESTADÍSTICA POBLACIONAL ----
+    EstadisticaPoblacional:
+      type: object
+      properties:
+        codigo_institucion: { type: string }
+        anio: { type: integer, example: 2024 }
+        periodo: { type: integer, enum: [1, 2] }
+        inscritos: { type: [integer, 'null'] }
+        admitidos: { type: [integer, 'null'] }
+        matriculados:
+          type: [integer, 'null']
+          description: Total de estudiantes matriculados (proxy de "número de estudiantes").
+        matriculados_primer_curso: { type: [integer, 'null'] }
+        graduados: { type: [integer, 'null'] }
+        fuente: { $ref: '#/components/schemas/Fuente' }
+
+    # ---- INDICADOR DE RESULTADO (genérico, trazable) ----
+    Indicador:
+      type: object
+      description: >-
+        Indicador oficial atómico. Cada uno es independiente, trae su año, su
+        unidad, su grano (institución/programa/NBC) y su fuente.
+      required: [clave, dominio, valor, unidad, anio, fuente]
+      properties:
+        clave:
+          type: string
+          description: Identificador estable del indicador.
+          enum:
+            - saber_pro_promedio_global
+            - saber_pro_competencias_genericas
+            - empleabilidad_tasa_vinculacion
+            - ingreso_mediano_enganche
+            - desercion_anual
+            - desercion_por_cohorte
+            - tasa_graduacion
+          example: ingreso_mediano_enganche
+        dominio:
+          type: string
+          enum: [calidad, empleabilidad, permanencia]
+        etiqueta:
+          type: string
+          example: Ingreso mediano de enganche (recién graduados)
+        valor:
+          type: [number, 'null']
+          example: 2350000
+        unidad:
+          type: string
+          example: COP/mes
+          enum: [puntos, porcentaje, COP/mes, conteo]
+        anio:
+          type: integer
+          example: 2023
+        grano:
+          type: string
+          description: Nivel al que la fuente publica el dato.
+          enum: [institucion, programa, nbc, area, nacional]
+        cohorte:
+          type: [string, 'null']
+          description: Cohorte de referencia para indicadores de permanencia.
+        comparabilidad:
+          type: [string, 'null']
+          description: Notas sobre con qué es válido comparar este valor.
+        fuente: { $ref: '#/components/schemas/Fuente' }
+
+    IndicadoresResultado:
+      type: object
+      properties:
+        entidad_tipo:
+          type: string
+          enum: [institucion, programa]
+        codigo_snies: { type: string }
+        nombre: { type: string }
+        indicadores:
+          type: array
+          items: { $ref: '#/components/schemas/Indicador' }
+        disponibilidad:
+          type: array
+          items: { $ref: '#/components/schemas/Disponibilidad' }
+    IndicadoresResource:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/IndicadoresResultado' }
+
+    # ---- COMPARACIÓN (matriz entidad × indicador) ----
+    Comparacion:
+      type: object
+      description: Resultado de una comparación lado a lado.
+      properties:
+        tipo:
+          type: string
+          enum: [instituciones, programas]
+        entidades:
+          type: array
+          description: Entidades comparadas (en el orden solicitado).
+          items:
+            type: object
+            properties:
+              codigo_snies: { type: string }
+              nombre: { type: string }
+              enlace: { type: string, format: uri }
+        indicadores:
+          type: array
+          description: Filas de la matriz; una por indicador.
+          items:
+            type: object
+            properties:
+              clave: { type: string, example: ingreso_mediano_enganche }
+              etiqueta: { type: string }
+              dominio: { type: string, enum: [calidad, empleabilidad, permanencia, catalogo] }
+              unidad: { type: string }
+              mejor_direccion:
+                type: string
+                description: Si un valor mayor o menor es "mejor" (para resaltar en UI).
+                enum: [mayor_mejor, menor_mejor, neutro]
+              valores:
+                type: array
+                description: Un valor por entidad, alineado por índice.
+                items:
+                  type: object
+                  properties:
+                    codigo_snies: { type: string }
+                    valor: { type: [number, string, 'null'] }
+                    anio: { type: [integer, 'null'] }
+                    fuente: { $ref: '#/components/schemas/Fuente' }
+        advertencias:
+          type: array
+          description: Avisos de comparabilidad (años distintos, granos distintos, NBC distinto).
+          items: { type: string }
+          example:
+            - "El ingreso de enganche de 'UNIVERSIDAD A' corresponde a 2022 y el de 'UNIVERSIDAD B' a 2023."
+        meta:
+          type: object
+          properties:
+            generado_en: { type: string, format: date-time }
+            nota_metodologica:
+              type: string
+              example: >-
+                comparaU no produce un ranking propio. Cada indicador proviene
+                de su fuente oficial (ICFES, OLE, SPADIES, CNA, SNIES) y se
+                presenta sin ponderación.
+
+    # ---- CATÁLOGO ----
+    CatalogoItem:
+      type: object
+      properties:
+        codigo: { type: string }
+        nombre: { type: string }
+        padre:
+          type: [string, 'null']
+          description: Código del elemento padre (p. ej., NBC dentro de un área).
+
+    FuenteCatalogo:
+      type: object
+      properties:
+        sistema: { type: string }
+        dataset: { type: string }
+        dataset_id: { type: string }
+        url: { type: string, format: uri }
+        licencia: { type: string }
+        frecuencia_actualizacion: { type: string, example: Anual }
+        ultima_sincronizacion: { type: string, format: date }
+        registros: { type: integer }
+
+    # ---- Envolturas de paginación (JSON:API-like) ----
+    Paginacion:
+      type: object
+      properties:
+        total: { type: integer, example: 12450 }
+        limit: { type: integer, example: 50 }
+        cursor_actual: { type: [string, 'null'] }
+        siguiente: { type: [string, 'null'], description: Cursor de la página siguiente. }
+        anterior: { type: [string, 'null'] }
+    MetaColeccion:
+      type: object
+      properties:
+        paginacion: { $ref: '#/components/schemas/Paginacion' }
+        generado_en: { type: string, format: date-time }
+        fuente_principal: { $ref: '#/components/schemas/FuenteCatalogo' }
+
+    InstitucionCollection:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Institucion' }
+        meta: { $ref: '#/components/schemas/MetaColeccion' }
+    InstitucionResource:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/Institucion' }
+    SedeCollection:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Sede' }
+        meta: { $ref: '#/components/schemas/MetaColeccion' }
+    ProgramaCollection:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Programa' }
+        meta: { $ref: '#/components/schemas/MetaColeccion' }
+    ProgramaResource:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/Programa' }
+    AcreditacionCollection:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Acreditacion' }
+        meta: { $ref: '#/components/schemas/MetaColeccion' }
+    EstadisticaPoblacionalCollection:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/EstadisticaPoblacional' }
+        meta: { $ref: '#/components/schemas/MetaColeccion' }
+    CatalogoCollection:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/CatalogoItem' }
+        meta: { $ref: '#/components/schemas/MetaColeccion' }
+
+    # ---- Error RFC 9457 (Problem Details) ----
+    Problem:
+      type: object
+      description: Detalle de error según RFC 9457 (Problem Details for HTTP APIs).
+      properties:
+        type:
+          type: string
+          format: uri
+          example: https://esco-api.example.co/problemas/parametro-invalido
+        title:
+          type: string
+          example: Parámetro de consulta inválido
+        status:
+          type: integer
+          example: 400
+        detail:
+          type: string
+          example: "El valor 'xyz' para 'sector' no pertenece al enum {Oficial, Privado}."
+        instance:
+          type: string
+          example: /v1/instituciones?sector=xyz
+        errors:
+          type: array
+          description: Lista de errores de validación por campo.
+          items:
+            type: object
+            properties:
+              campo: { type: string }
+              mensaje: { type: string }
