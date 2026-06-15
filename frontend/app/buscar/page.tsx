@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Search, MapPin, BadgeCheck, Building2, BookOpen, Layers } from "lucide-react";
 import { api } from "@/lib/api";
@@ -18,17 +18,21 @@ export default function BuscarPage() {
   const [progs, setProgs] = useState<Programa[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const seqRef = useRef(0);
   useEffect(() => {
     const t = setTimeout(async () => {
+      const seq = ++seqRef.current;
       setLoading(true);
       try {
         if (modo === "universidades") {
-          setInsts((await api.instituciones({ q, sector, caracter_academico: caracter, limit: 24 })).data);
+          const data = (await api.instituciones({ q, sector, caracter_academico: caracter, limit: 24 })).data;
+          if (seq === seqRef.current) setInsts(data);
         } else {
-          setProgs(await api.programas({ q, limit: 30 }));
+          const r = await api.programas({ q, limit: 30 });
+          if (seq === seqRef.current) setProgs(r);
         }
-      } catch { setInsts([]); setProgs([]); }
-      finally { setLoading(false); }
+      } catch { if (seq === seqRef.current) { setInsts([]); setProgs([]); } }
+      finally { if (seq === seqRef.current) setLoading(false); }
     }, 280);
     return () => clearTimeout(t);
   }, [q, sector, caracter, modo]);
