@@ -1,0 +1,26 @@
+# comparaU.com — Caddy: HTTPS automático (Let's Encrypt) y proxy a la API.
+# Cambia el dominio y el email antes de desplegar. Apunta el A-record de
+# api.comparau.com a la IP del VPS ANTES de levantar el stack.
+
+{
+	email admin@comparau.com
+}
+
+api.comparau.com {
+	encode zstd gzip
+
+	# Cabeceras de seguridad
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# CORS para el frontend en Vercel (gestionado también en FastAPI)
+	@options method OPTIONS
+	respond @options 204
+
+	reverse_proxy api:8000
+}
