@@ -1,5 +1,4 @@
-// Tipos del dominio. En producción se generan del OpenAPI (openapi-typescript);
-// estos son los esenciales escritos a mano para arrancar.
+// Tipos del dominio comparaU (datos oficiales SNIES / ICFES, datos.gov.co).
 export interface Fuente {
   sistema: string;
   dataset?: string;
@@ -23,32 +22,29 @@ export interface Institucion {
   fuente: Fuente;
 }
 
+// Nota: el dataset de programas (upr9-nkiz) trae corruptas las columnas
+// nombreprograma/codigoprograma (contienen el departamento). Por eso el
+// "nombre" del programa se toma del título otorgado y se identifica con un uid sintético.
 export interface Programa {
-  codigo_snies: string;
-  nombre: string;
+  uid: string;
+  nombre: string; // = título otorgado (ej. "PSICÓLOGO")
+  institucion: string;
   codigo_institucion: string;
   nivel_academico: "Pregrado" | "Posgrado";
   nivel_formacion?: string;
+  area?: string;
   nbc?: string;
   metodologia?: string;
   creditos?: number;
+  periodos?: number;
+  periodicidad?: string;
+  municipio?: string;
   acreditado: boolean;
+  tipo_acreditacion?: string;
+  anios_acreditados?: number;
   fuente: Fuente;
 }
 
 export interface Paginacion { total: number; limit: number; siguiente?: string }
 export interface InstitucionCollection { data: Institucion[]; meta: { paginacion: Paginacion } }
 export interface ProgramaCollection { data: Programa[]; meta: { paginacion: Paginacion } }
-
-export interface IndicadorValor { codigo_snies: string; valor: number | string | null; anio?: number; fuente: Fuente }
-export interface IndicadorFila {
-  clave: string; etiqueta: string; dominio: string; unidad: string;
-  mejor_direccion: "mayor_mejor" | "menor_mejor" | "neutro"; valores: IndicadorValor[];
-}
-export interface Comparacion {
-  tipo: string;
-  entidades: { codigo_snies: string; nombre: string }[];
-  indicadores: IndicadorFila[];
-  advertencias: string[];
-  meta: { nota_metodologica: string };
-}
