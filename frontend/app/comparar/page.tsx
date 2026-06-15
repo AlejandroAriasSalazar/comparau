@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Plus, X, Scale, ShieldCheck, BadgeCheck, GraduationCap, Building2, BookOpen } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Institucion, Programa } from "@/lib/types";
@@ -47,13 +47,28 @@ export default function CompararPage() {
 
   function cambiarModo(m: Modo) { setModo(m); setQ(""); setSugU([]); setSugP([]); setResU(null); setResP(null); }
 
-  async function buscar(texto: string) {
+  // Antirrebote + guarda de orden: cada tecla cancela el temporizador anterior y solo
+  // se pintan los resultados de la ÚLTIMA consulta (evita que una respuesta lenta de una
+  // búsqueda parcial llegue tarde y reemplace a la correcta).
+  const seqRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  function buscar(texto: string) {
     setQ(texto);
-    if (texto.length < 2) { setSugU([]); setSugP([]); return; }
-    try {
-      if (modo === "universidades") setSugU((await api.instituciones({ q: texto, limit: 6 })).data);
-      else setSugP(await api.programas({ q: texto, limit: 8 }));
-    } catch { setSugU([]); setSugP([]); }
+    const t = texto.trim();
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (t.length < 3) { setSugU([]); setSugP([]); return; }
+    timerRef.current = setTimeout(async () => {
+      const seq = ++seqRef.current;
+      try {
+        if (modo === "universidades") {
+          const data = (await api.instituciones({ q: t, limit: 6 })).data;
+          if (seq === seqRef.current) setSugU(data);
+        } else {
+          const r = await api.programas({ q: t, limit: 8 });
+          if (seq === seqRef.current) setSugP(r);
+        }
+      } catch { if (seq === seqRef.current) { setSugU([]); setSugP([]); } }
+    }, 220);
   }
 
   function addU(i: Institucion) { if (selU.length < 5 && !selU.find((s) => s.codigo_snies === i.codigo_snies)) setSelU([...selU, i]); setQ(""); setSugU([]); }
