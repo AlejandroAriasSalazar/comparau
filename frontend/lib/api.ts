@@ -12,6 +12,7 @@ import type { Institucion, Programa, InstitucionCollection, ProgramaCollection }
 const SODA = "https://www.datos.gov.co/resource";
 const INST = "n5yy-8nav";
 const PROG = "upr9-nkiz";
+const SABER = "u37r-hjmu"; // Resultados únicos Saber Pro (ICFES) — usa el mismo código de institución del SNIES
 
 const FUENTE_INST = {
   sistema: "SNIES",
@@ -138,5 +139,28 @@ export const api = {
       $where: `codigoinstitucion=${Number(codigoInstitucion)} AND nombreestadoprograma='Activo'`,
     });
     return rows.length ? Number(rows[0].count) : 0;
+  },
+
+  // Promedio global Saber Pro (ICFES), calculado en el servidor de datos.gov.co.
+  // El "global" es el promedio de las 5 competencias genéricas. Solo datos reales y agregados.
+  async saberPro(codigoInstitucion: string): Promise<{ global: number; n: number } | null> {
+    const sel = [
+      "avg(mod_razona_cuantitat_punt::number) as cuant",
+      "avg(mod_lectura_critica_punt::number) as lect",
+      "avg(mod_competen_ciudada_punt::number) as ciud",
+      "avg(mod_comuni_escrita_punt::number) as escr",
+      "avg(mod_ingles_punt::number) as ing",
+      "count(*) as n",
+    ].join(",");
+    const rows: Record<string, string>[] = await soda(SABER, {
+      $select: sel,
+      $where: `inst_cod_institucion='${Number(codigoInstitucion)}'`,
+    });
+    if (!rows.length || !Number(rows[0].n)) return null;
+    const r = rows[0];
+    const mods = [r.cuant, r.lect, r.ciud, r.escr, r.ing].map(Number).filter((x) => !isNaN(x) && x > 0);
+    if (!mods.length) return null;
+    const global = mods.reduce((a, b) => a + b, 0) / mods.length;
+    return { global: Math.round(global), n: Number(r.n) };
   },
 };
