@@ -89,6 +89,93 @@ function dedupe<T>(rows: T[], key: (r: T) => unknown): T[] {
   });
 }
 
+// ————————————————— Buscador inteligente de programas —————————————————
+// Palabras vacías que no aportan a la búsqueda.
+const STOP = new Set(["de", "del", "la", "el", "los", "las", "y", "e", "o", "u", "en", "con", "para", "por", "a", "al", "un", "una", "the", "of"]);
+
+// Sinónimos / nombres comunes -> términos tal como aparecen en el catálogo oficial.
+const SINONIMOS: Record<string, string[]> = {
+  sistemas: ["sistemas", "computacion", "informatica", "software"],
+  software: ["software", "sistemas", "informatica"],
+  computacion: ["computacion", "sistemas", "informatica"],
+  informatica: ["informatica", "sistemas", "computacion"],
+  sicologia: ["psicologia"], sicologo: ["psicologo"],
+  mercadeo: ["mercadeo", "marketing", "mercadotecnia"], marketing: ["marketing", "mercadeo"],
+  finanzas: ["finanzas", "financiero", "financiera"],
+  medicina: ["medicina", "medico"], veterinaria: ["veterinaria", "veterinario"],
+  leyes: ["derecho", "abogado", "juridico"], gastronomia: ["gastronomia", "culinario", "cocina"],
+};
+function expandirSinonimos(t: string): string[] { return [...new Set(SINONIMOS[t] ?? [t])]; }
+
+// Distancia de edición (Levenshtein) acotada — tolera errores de tipeo. Corta apenas supera el máximo.
+function lev(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i]; let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+      cur.push(v); if (v < best) best = v;
+    }
+    if (best > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function prefijoComun(a: string, b: string): number { let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++; return i; }
+
+// Cuánto "pega" un término contra las palabras de un campo: exacto > prefijo > raíz común > subcadena > difuso.
+function coincidencia(tok: string, words: string[]): number {
+  let best = 0;
+  for (const w of words) {
+    let s = 0;
+    if (w === tok) s = 1;
+    else if (w.length >= 3 && (w.startsWith(tok) || tok.startsWith(w))) s = 0.85;
+    else {
+      const cp = prefijoComun(tok, w);
+      if (cp >= 5 && cp >= 0.6 * Math.min(tok.length, w.length)) s = 0.72; // raíz común ("administrativa"~"administrador")
+      else if (tok.length >= 4 && w.includes(tok)) s = 0.7;
+      else { const mx = tok.length <= 4 ? 0 : tok.length <= 7 ? 1 : 2; if (mx > 0 && lev(tok, w, mx) <= mx) s = 0.5; } // typo
+    }
+    if (s > best) best = s;
+  }
+  return best;
+}
+
+// Vocabulario de "carrera" (palabras de los NBC + áreas) para distinguir carrera de universidad.
+// Se descarga una sola vez y se cachea.
+let vocabPromise: Promise<Set<string>> | null = null;
+function getVocab(): Promise<Set<string>> {
+  if (!vocabPromise) {
+    vocabPromise = (async () => {
+      const v = new Set<string>(["empresas", "negocios", "internacional", "internacionales", "publica", "publico", "software", "datos", "exterior", "social", "clinica", "deportiva", "financiera"]);
+      try {
+        const [nbc, area] = await Promise.all([
+          soda(PROG, { $select: "nombrenbc", $group: "nombrenbc", $limit: 300 }) as Promise<Record<string, string>[]>,
+          soda(PROG, { $select: "nombreareaconocimiento", $group: "nombreareaconocimiento", $limit: 80 }) as Promise<Record<string, string>[]>,
+        ]);
+        for (const r of nbc) for (const w of fold(r["nombrenbc"]).split(/\s+/)) if (w.length >= 4 && w !== "afines") v.add(w);
+        for (const r of area) for (const w of fold(r["nombreareaconocimiento"]).split(/\s+/)) if (w.length >= 4 && w !== "afines") v.add(w);
+      } catch { /* si falla, todo se tratará como carrera (degradación segura) */ }
+      return v;
+    })();
+  }
+  return vocabPromise;
+}
+
+// Resuelve los tokens de "universidad" a códigos de institución (con filtro fino en el cliente
+// para descartar coincidencias accidentales del comodín, p.ej. "eafit" -> "FITEC").
+async function resolverInstituciones(toks: string[]): Promise<string[]> {
+  const conds = toks.map((t) => `upper(nombre_instituci_n) like upper('%${aiPattern(t)}%')`).join(" AND ");
+  const rows: Record<string, string>[] = await soda(INST, { $select: "c_digo_instituci_n,nombre_instituci_n", $where: conds, $limit: 60 });
+  const keep = rows.filter((r) => {
+    const fn = fold(r["nombre_instituci_n"]);
+    return toks.every((t) => fn.includes(t) || fn.split(/\s+/).some((w) => w.length > 3 && lev(t, w, t.length <= 5 ? 1 : 2) <= (t.length <= 5 ? 1 : 2)));
+  });
+  return [...new Set(keep.map((r) => String(r["c_digo_instituci_n"])))];
+}
+
 export const api = {
   async instituciones(p?: { q?: string; sector?: string; caracter_academico?: string; limit?: number }): Promise<InstitucionCollection> {
     const where = ["principal_seccional='Principal'"];
@@ -106,42 +193,85 @@ export const api = {
     return mapInst(rows.find((r) => r["principal_seccional"] === "Principal") ?? rows[0]);
   },
 
-  // Búsqueda de programas por título otorgado o núcleo de conocimiento (NBC).
-  // Insensible a tildes y mayúsculas: el catálogo guarda los NBC con tilde
-  // ("Ingeniería administrativa") y SoQL 'like' distingue í de i, así que el término
-  // se convierte en un patrón con comodines y luego se filtra/ordena en el cliente.
+  // Buscador inteligente de programas. Entiende: tildes y mayúsculas, varias palabras en
+  // cualquier orden, "universidad + carrera" juntas ("psicología javeriana"), errores de
+  // tipeo ("psiclogia") y sinónimos/nombres comunes ("medicina"→Médico, "sistemas"→Ing. de Sistemas).
+  // Ordena por relevancia, dando prioridad a pregrado (el público típico son estudiantes y familias).
   async programas(p?: { q?: string; codigo_institucion?: string; nivel?: string; limit?: number }): Promise<Programa[]> {
     const limit = p?.limit ?? 40;
     const q = p?.q?.trim();
-    const where = ["nombreestadoprograma='Activo'"];
-    if (p?.codigo_institucion) where.push(`codigoinstitucion=${Number(p.codigo_institucion)}`);
-    if (p?.nivel) where.push(`nombrenivelacademico='${esc(p.nivel)}'`);
-    if (q) {
-      const pat = `'%${aiPattern(q)}%'`;
-      where.push(`(upper(nombretituloobtenido) like upper(${pat}) OR upper(nombrenbc) like upper(${pat}))`);
-    }
-    // Si hay texto, traemos un lote amplio para poder reordenar por relevancia en el cliente.
-    const rows: Record<string, string>[] = await soda(PROG, { $where: where.join(" AND "), $order: "nombretituloobtenido", $limit: q ? 200 : limit });
-    let progs = dedupe(rows.map(mapProg), (r) => r.uid);
 
-    if (q) {
-      const f = fold(q);
-      const words = f.split(/\s+/).filter((w) => w.length >= 3).map((w) => w.slice(0, 6)); // raíces (manejan "ingeniero" vs "ingeniería")
-      const score = (pr: Programa) => {
-        const t = fold(pr.nombre), n = fold(pr.nbc ?? "");
-        let s = 0;
-        if (words.length && t.startsWith(words[0])) s += 30;            // el título empieza por lo buscado
-        for (const w of words) { if (t.includes(w)) s += 20; else if (n.includes(w)) s += 4; } // raíz en título > en NBC
-        if (pr.nivel_academico === "Pregrado") s += 40;                 // los estudiantes suelen buscar pregrado
-        s -= Math.min(t.length, 60) / 30;                               // a igualdad, preferimos títulos más concretos
-        return s;
-      };
-      progs = progs
-        .filter((pr) => { const t = fold(pr.nombre), n = fold(pr.nbc ?? ""); return words.every((w) => t.includes(w) || n.includes(w)); })
-        .sort((a, b) => score(b) - score(a))
-        .slice(0, limit);
+    // Sin texto: simplemente listar (p.ej. los programas de una institución).
+    if (!q) {
+      const where = ["nombreestadoprograma='Activo'"];
+      if (p?.codigo_institucion) where.push(`codigoinstitucion=${Number(p.codigo_institucion)}`);
+      if (p?.nivel) where.push(`nombrenivelacademico='${esc(p.nivel)}'`);
+      const rows: Record<string, string>[] = await soda(PROG, { $where: where.join(" AND "), $order: "nombretituloobtenido", $limit: limit });
+      return dedupe(rows.map(mapProg), (r) => r.uid);
     }
-    return progs;
+
+    // 1) Tokenizar y clasificar cada palabra en "carrera" o "universidad".
+    const tokens = fold(q).split(/\s+/).filter((t) => t.length >= 2 && !STOP.has(t));
+    if (!tokens.length) return [];
+    const vocab = await getVocab();
+    let carrera: string[] = [], universidad: string[] = [];
+    for (const t of tokens) (!vocab.size || vocab.has(t) || t.length < 4 ? carrera : universidad).push(t);
+
+    // 2) Resolver "universidad" a códigos. Si no resuelve (o es ambiguo), esos tokens vuelven a carrera.
+    let codes: string[] = [];
+    if (universidad.length) {
+      try { codes = await resolverInstituciones(universidad); } catch { codes = []; }
+      if (!codes.length || codes.length > 15) { carrera = carrera.concat(universidad); universidad = []; codes = []; }
+    }
+    const grupos = carrera.map(expandirSinonimos);
+    if (!grupos.length && !codes.length) return [];
+
+    // 3) Consulta: filtro por institución (si aplica) + cada término de carrera en título o NBC
+    //    (insensible a tildes vía comodines). OR entre sinónimos, AND entre términos.
+    const baseWhere = (extra: string[]) => {
+      const w = ["nombreestadoprograma='Activo'"];
+      if (p?.codigo_institucion) w.push(`codigoinstitucion=${Number(p.codigo_institucion)}`);
+      if (p?.nivel) w.push(`nombrenivelacademico='${esc(p.nivel)}'`);
+      if (codes.length) w.push(`codigoinstitucion in(${codes.join(",")})`);
+      return w.concat(extra);
+    };
+    const groupClause = (g: string[]) => {
+      const ors: string[] = [];
+      for (const x of g) { const pat = `'%${aiPattern(x)}%'`; ors.push(`upper(nombretituloobtenido) like upper(${pat})`, `upper(nombrenbc) like upper(${pat})`); }
+      return `(${ors.join(" OR ")})`;
+    };
+    let rows: Record<string, string>[] = await soda(PROG, { $where: baseWhere(grupos.map(groupClause)).join(" AND "), $order: "nombretituloobtenido", $limit: 250 });
+
+    // 3b) Red de seguridad para typos: si hubo pocas filas, anclar en las primeras letras
+    //     (normalmente sin error) del término más largo y dejar que el filtro difuso decida.
+    if (grupos.length && rows.length < 6) {
+      const lg = carrera.slice().sort((a, b) => b.length - a.length)[0];
+      const pat = `'%${aiPattern(lg.slice(0, Math.min(4, lg.length)))}%'`;
+      const more: Record<string, string>[] = await soda(PROG, { $where: baseWhere([`(upper(nombretituloobtenido) like upper(${pat}) OR upper(nombrenbc) like upper(${pat}))`]).join(" AND "), $order: "nombretituloobtenido", $limit: 250 });
+      rows = rows.concat(more);
+    }
+    const progs = dedupe(rows.map(mapProg), (r) => r.uid);
+
+    // 4) Filtrar (todos los términos de carrera deben coincidir) y ordenar por relevancia.
+    const score = (pr: Programa): number => {
+      const tw = fold(pr.nombre).split(/\s+/), nw = fold(pr.nbc ?? "").split(/\s+/);
+      let total = 0;
+      for (const g of grupos) {
+        let best = 0;
+        for (const x of g) { const s = Math.max(coincidencia(x, tw) * 30, coincidencia(x, nw) * 16); if (s > best) best = s; }
+        if (best === 0) return -1; // término ausente -> descartar
+        total += best;
+      }
+      if (pr.nivel_academico === "Pregrado") total += 40;
+      total -= Math.min(fold(pr.nombre).length, 60) / 40;
+      return total;
+    };
+    return progs
+      .map((pr) => ({ pr, s: score(pr) }))
+      .filter((x) => x.s >= 0)
+      .sort((a, b) => b.s - a.s)
+      .slice(0, limit)
+      .map((x) => x.pr);
   },
 
   async conteoProgramas(codigoInstitucion: string): Promise<number> {
