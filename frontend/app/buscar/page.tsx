@@ -101,6 +101,7 @@ export default function BuscarPage() {
               </div>
               <h3 className="mt-3 line-clamp-2 font-semibold text-ink">{p.nombre}</h3>
               <div className="mt-1 line-clamp-1 text-sm text-ink-soft">{p.institucion}</div>
+              {(p.nbc || p.area) && <div className="mt-1 line-clamp-1 text-xs text-brand-700/70">{p.nbc ?? p.area}</div>}
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="chip chip-brand">{p.nivel_academico}</span>
                 {p.metodologia && <span className="chip">{p.metodologia}</span>}
