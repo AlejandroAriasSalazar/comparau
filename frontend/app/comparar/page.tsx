@@ -145,6 +145,7 @@ export default function CompararPage() {
                   <li key={p.uid}><button onClick={() => addP(p)} className="w-full rounded-lg px-3 py-2 text-left hover:bg-surface-soft">
                     <div className="text-sm font-medium text-ink">{p.nombre}</div>
                     <div className="text-xs text-ink-faint">{p.institucion} · {p.nivel_academico}{p.municipio ? ` · ${p.municipio}` : ""}</div>
+                    {(p.nbc || p.area) && <div className="mt-0.5 truncate text-[11px] text-brand-700/70">{p.nbc ?? p.area}</div>}
                   </button></li>
                 ))}
               </ul>
